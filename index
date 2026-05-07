@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voice FX</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+–bg: #0e0e12;
+–surface: #17171d;
+–surface2: #1f1f28;
+–border: rgba(255,255,255,0.07);
+–accent: #c8f135;
+–accent2: #7b6ef6;
+–text: #f0f0f4;
+–muted: #6b6b7e;
+–danger: #ff5c5c;
+}
+
+body {
+font-family: ‘DM Sans’, sans-serif;
+background: var(–bg);
+color: var(–text);
+min-height: 100vh;
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: center;
+padding: 24px;
+overflow-x: hidden;
+}
+
+/* subtle noise texture */
+body::before {
+content: ‘’;
+position: fixed;
+inset: 0;
+background-image: url(“data:image/svg+xml,%3Csvg viewBox=‘0 0 256 256’ xmlns=‘http://www.w3.org/2000/svg’%3E%3Cfilter id=‘noise’%3E%3CfeTurbulence type=‘fractalNoise’ baseFrequency=‘0.9’ numOctaves=‘4’ stitchTiles=‘stitch’/%3E%3C/filter%3E%3Crect width=‘100%25’ height=‘100%25’ filter=‘url(%23noise)’ opacity=‘0.03’/%3E%3C/svg%3E”);
+pointer-events: none;
+z-index: 0;
+}
+
+.app {
+position: relative;
+z-index: 1;
+width: 100%;
+max-width: 480px;
+}
+
+header {
+margin-bottom: 40px;
+text-align: center;
+}
+
+header h1 {
+font-size: 2rem;
+font-weight: 600;
+letter-spacing: -0.04em;
+color: var(–text);
+}
+
+header h1 span {
+color: var(–accent);
+}
+
+header p {
+font-size: 0.85rem;
+color: var(–muted);
+margin-top: 6px;
+font-weight: 300;
+}
+
+/* Mic button */
+.mic-wrap {
+display: flex;
+justify-content: center;
+margin-bottom: 40px;
+}
+
+.mic-btn {
+width: 88px;
+height: 88px;
+border-radius: 50%;
+border: 2px solid var(–border);
+background: var(–surface);
+cursor: pointer;
+display: flex;
+align-items: center;
+justify-content: center;
+transition: all 0.2s ease;
+position: relative;
+outline: none;
+}
+
+.mic-btn svg {
+width: 32px;
+height: 32px;
+fill: var(–muted);
+transition: fill 0.2s;
+}
+
+.mic-btn:hover {
+border-color: var(–accent);
+background: var(–surface2);
+}
+
+.mic-btn:hover svg { fill: var(–accent); }
+
+.mic-btn.active {
+border-color: var(–danger);
+background: rgba(255,92,92,0.1);
+animation: pulse 1.5s ease-in-out infinite;
+}
+
+.mic-btn.active svg { fill: var(–danger); }
+
+@keyframes pulse {
+0%, 100% { box-shadow: 0 0 0 0 rgba(255,92,92,0.3); }
+50% { box-shadow: 0 0 0 16px rgba(255,92,92,0); }
+}
+
+.mic-label {
+position: absolute;
+bottom: -22px;
+left: 50%;
+transform: translateX(-50%);
+font-size: 0.72rem;
+color: var(–muted);
+white-space: nowrap;
+font-family: ‘DM Mono’, monospace;
+letter-spacing: 0.05em;
+}
+
+/* Waveform canvas */
+.waveform-wrap {
+background: var(–surface);
+border: 1px solid var(–border);
+border-radius: 16px;
+padding: 16px;
+margin-bottom: 28px;
+height: 72px;
+display: flex;
+align-items: center;
+overflow: hidden;
+}
+
+canvas {
+width: 100%;
+height: 40px;
+display: block;
+}
+
+/* Effects grid */
+.section-label {
+font-size: 0.72rem;
+letter-spacing: 0.1em;
+text-transform: uppercase;
+color: var(–muted);
+margin-bottom: 14px;
+font-family: ‘DM Mono’, monospace;
+}
+
+.effects-grid {
+display: grid;
+grid-template-columns: repeat(3, 1fr);
+gap: 10px;
+margin-bottom: 28px;
+}
+
+.fx-btn {
+background: var(–surface);
+border: 1px solid var(–border);
+border-radius: 12px;
+padding: 14px 10px;
+cursor: pointer;
+text-align: center;
+transition: all 0.18s ease;
+outline: none;
+color: var(–muted);
+}
+
+.fx-btn .icon { font-size: 1.4rem; display: block; margin-bottom: 6px; }
+.fx-btn .name { font-size: 0.75rem; font-weight: 500; display: block; color: var(–text); }
+.fx-btn .desc { font-size: 0.65rem; color: var(–muted); display: block; margin-top: 2px; }
+
+.fx-btn:hover {
+border-color: var(–accent2);
+background: var(–surface2);
+color: var(–text);
+}
+
+.fx-btn.active {
+border-color: var(–accent);
+background: rgba(200,241,53,0.07);
+color: var(–accent);
+}
+
+.fx-btn.active .desc { color: rgba(200,241,53,0.6); }
+
+/* Sliders */
+.sliders {
+display: flex;
+flex-direction: column;
+gap: 18px;
+margin-bottom: 28px;
+}
+
+.slider-row {
+display: flex;
+align-items: center;
+gap: 14px;
+}
+
+.slider-label {
+font-size: 0.8rem;
+color: var(–muted);
+width: 80px;
+flex-shrink: 0;
+}
+
+.slider-val {
+font-size: 0.78rem;
+font-family: ‘DM Mono’, monospace;
+color: var(–accent);
+width: 38px;
+text-align: right;
+flex-shrink: 0;
+}
+
+input[type=range] {
+-webkit-appearance: none;
+flex: 1;
+height: 3px;
+background: var(–surface2);
+border-radius: 2px;
+outline: none;
+cursor: pointer;
+}
+
+input[type=range]::-webkit-slider-thumb {
+-webkit-appearance: none;
+width: 16px;
+height: 16px;
+border-radius: 50%;
+background: var(–accent);
+cursor: pointer;
+transition: transform 0.15s;
+}
+
+input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.25); }
+
+/* Status bar */
+.status {
+background: var(–surface);
+border: 1px solid var(–border);
+border-radius: 10px;
+padding: 12px 16px;
+display: flex;
+align-items: center;
+gap: 10px;
+font-size: 0.8rem;
+color: var(–muted);
+font-family: ‘DM Mono’, monospace;
+}
+
+.status-dot {
+width: 7px;
+height: 7px;
+border-radius: 50%;
+background: var(–muted);
+flex-shrink: 0;
+transition: background 0.3s;
+}
+
+.status-dot.live { background: var(–danger); animation: blink 1s ease-in-out infinite; }
+.status-dot.ready { background: var(–accent); }
+
+@keyframes blink {
+0%, 100% { opacity: 1; }
+50% { opacity: 0.3; }
+}
+</style>
+
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Voice<span>FX</span></h1>
+    <p>Echtzeit Stimmenverzerrer</p>
+  </header>
+
+  <div class="waveform-wrap">
+    <canvas id="wave" height="40"></canvas>
+  </div>
+
+  <div class="mic-wrap">
+    <button class="mic-btn" id="micBtn" title="Mikrofon starten">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm-2 15.93A8 8 0 0 0 20 11h-2a6 6 0 0 1-12 0H4a8 8 0 0 0 6 7.93V21H8v2h8v-2h-2v-2.07z"/>
+      </svg>
+      <span class="mic-label" id="micLabel">START</span>
+    </button>
+  </div>
+
+  <div class="section-label">Effekte</div>
+  <div class="effects-grid">
+    <button class="fx-btn active" data-fx="none">
+      <span class="icon">🎤</span>
+      <span class="name">Original</span>
+      <span class="desc">Kein Effekt</span>
+    </button>
+    <button class="fx-btn" data-fx="robot">
+      <span class="icon">🤖</span>
+      <span class="name">Roboter</span>
+      <span class="desc">Mechanisch</span>
+    </button>
+    <button class="fx-btn" data-fx="deep">
+      <span class="icon">👹</span>
+      <span class="name">Dämon</span>
+      <span class="desc">Tief & dunkel</span>
+    </button>
+    <button class="fx-btn" data-fx="chipmunk">
+      <span class="icon">🐿️</span>
+      <span class="name">Chipmunk</span>
+      <span class="desc">Hoch & schnell</span>
+    </button>
+    <button class="fx-btn" data-fx="echo">
+      <span class="icon">🏔️</span>
+      <span class="name">Echo</span>
+      <span class="desc">Hall-Effekt</span>
+    </button>
+    <button class="fx-btn" data-fx="radio">
+      <span class="icon">📻</span>
+      <span class="name">Radio</span>
+      <span class="desc">Walkie-Talkie</span>
+    </button>
+  </div>
+
+  <div class="section-label">Regler</div>
+  <div class="sliders">
+    <div class="slider-row">
+      <span class="slider-label">Pitch</span>
+      <input type="range" id="pitch" min="-12" max="12" value="0" step="1">
+      <span class="slider-val" id="pitchVal">0</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Lautstärke</span>
+      <input type="range" id="volume" min="0" max="200" value="100" step="1">
+      <span class="slider-val" id="volumeVal">100%</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Hall</span>
+      <input type="range" id="reverb" min="0" max="100" value="0" step="1">
+      <span class="slider-val" id="reverbVal">0%</span>
+    </div>
+  </div>
+
+  <div class="status">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText">Mikrofon starten um zu beginnen</span>
+  </div>
+</div>
+
+<script>
+let audioCtx = null;
+let micStream = null;
+let sourceNode = null;
+let gainNode = null;
+let distortionNode = null;
+let convolverNode = null;
+let reverbGain = null;
+let dryGain = null;
+let analyserNode = null;
+let isRunning = false;
+let currentFx = 'none';
+let animFrame = null;
+
+const canvas = document.getElementById('wave');
+const ctx2d = canvas.getContext('2d');
+
+function resizeCanvas() {
+  canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+  canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+  ctx2d.scale(window.devicePixelRatio, window.devicePixelRatio);
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+function drawIdle() {
+  const w = canvas.offsetWidth, h = canvas.offsetHeight;
+  ctx2d.clearRect(0, 0, w, h);
+  ctx2d.strokeStyle = 'rgba(107,107,126,0.4)';
+  ctx2d.lineWidth = 1.5;
+  ctx2d.beginPath();
+  ctx2d.moveTo(0, h/2);
+  ctx2d.lineTo(w, h/2);
+  ctx2d.stroke();
+}
+drawIdle();
+
+function drawWaveform() {
+  if (!analyserNode) return;
+  const bufferLength = analyserNode.fftSize;
+  const dataArray = new Uint8Array(bufferLength);
+  analyserNode.getByteTimeDomainData(dataArray);
+
+  const w = canvas.offsetWidth, h = canvas.offsetHeight;
+  ctx2d.clearRect(0, 0, w, h);
+  ctx2d.lineWidth = 1.5;
+  ctx2d.strokeStyle = isRunning ? '#c8f135' : 'rgba(107,107,126,0.4)';
+  ctx2d.beginPath();
+
+  const sliceWidth = w / bufferLength;
+  let x = 0;
+  for (let i = 0; i < bufferLength; i++) {
+    const v = dataArray[i] / 128.0;
+    const y = (v * h) / 2;
+    i === 0 ? ctx2d.moveTo(x, y) : ctx2d.lineTo(x, y);
+    x += sliceWidth;
+  }
+  ctx2d.stroke();
+  animFrame = requestAnimationFrame(drawWaveform);
+}
+
+async function createReverbBuffer(ctx) {
+  const sampleRate = ctx.sampleRate;
+  const length = sampleRate * 2;
+  const buffer = ctx.createBuffer(2, length, sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const data = buffer.getChannelData(ch);
+    for (let i = 0; i < length; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2);
+    }
+  }
+  return buffer;
+}
+
+function makeDistortionCurve(amount) {
+  const n = 256, curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = (i * 2) / n - 1;
+    curve[i] = ((Math.PI + amount) * x) / (Math.PI + amount * Math.abs(x));
+  }
+  return curve;
+}
+
+async function startAudio() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    micStream = stream;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    sourceNode = audioCtx.createMediaStreamSource(stream);
+    gainNode = audioCtx.createGain();
+    gainNode.gain.value = document.getElementById('volume').value / 100;
+
+    analyserNode = audioCtx.createAnalyser();
+    analyserNode.fftSize = 1024;
+
+    distortionNode = audioCtx.createWaveShaper();
+    convolverNode = audioCtx.createConvolver();
+    convolverNode.buffer = await createReverbBuffer(audioCtx);
+
+    reverbGain = audioCtx.createGain();
+    dryGain = audioCtx.createGain();
+
+    const reverbVal = document.getElementById('reverb').value / 100;
+    reverbGain.gain.value = reverbVal;
+    dryGain.gain.value = 1 - reverbVal * 0.5;
+
+    // Chain: source → analyser → distortion → dry/wet → gain → out
+    sourceNode.connect(analyserNode);
+    analyserNode.connect(distortionNode);
+    distortionNode.connect(dryGain);
+    distortionNode.connect(convolverNode);
+    convolverNode.connect(reverbGain);
+    dryGain.connect(gainNode);
+    reverbGain.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    applyEffect(currentFx);
+    isRunning = true;
+    setStatus('live', '🔴 Live – sprich ins Mikrofon');
+    document.getElementById('micBtn').classList.add('active');
+    document.getElementById('micLabel').textContent = 'STOP';
+    drawWaveform();
+  } catch(e) {
+    setStatus('', '⚠ Mikrofon-Zugriff verweigert');
+    console.error(e);
+  }
+}
+
+function stopAudio() {
+  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+  if (audioCtx) { audioCtx.close(); audioCtx = null; }
+  if (animFrame) cancelAnimationFrame(animFrame);
+  isRunning = false;
+  setStatus('', 'Mikrofon starten um zu beginnen');
+  document.getElementById('micBtn').classList.remove('active');
+  document.getElementById('micLabel').textContent = 'START';
+  drawIdle();
+}
+
+function applyEffect(fx) {
+  if (!audioCtx) return;
+  currentFx = fx;
+
+  // Reset
+  distortionNode.curve = null;
+  distortionNode.oversample = '2x';
+
+  // Detune via source playbackRate hack — use a script processor for pitch
+  // Simple pitch simulation via playback rate on oscillator trick isn't available for mic
+  // We'll use detune on a BiquadFilter as approximation
+  if (!window._pitchFilter) {
+    window._pitchFilter = audioCtx.createBiquadFilter();
+  }
+
+  switch(fx) {
+    case 'robot':
+      distortionNode.curve = makeDistortionCurve(80);
+      // add ring mod feel via tremolo
+      if (!window._robotOsc) {
+        window._robotOsc = audioCtx.createOscillator();
+        window._robotGain = audioCtx.createGain();
+        window._robotOsc.frequency.value = 50;
+        window._robotGain.gain.value = 0.6;
+        window._robotOsc.connect(window._robotGain);
+        window._robotGain.connect(gainNode.gain);
+        window._robotOsc.start();
+      }
+      break;
+    default:
+      if (window._robotOsc) {
+        try { window._robotOsc.stop(); } catch(e) {}
+        window._robotOsc = null;
+      }
+  }
+
+  // Deep / Chipmunk via playbackRate on AudioBuffer isn't direct, but we adjust gain tone
+  // For a real pitch shift we'd need a phase vocoder — approximation via biquad:
+  const bq = audioCtx.createBiquadFilter();
+  switch(fx) {
+    case 'deep':
+      bq.type = 'lowshelf';
+      bq.frequency.value = 300;
+      bq.gain.value = 12;
+      distortionNode.disconnect();
+      distortionNode.connect(bq);
+      bq.connect(dryGain);
+      bq.connect(convolverNode);
+      reverbGain.gain.value = 0.4;
+      break;
+    case 'chipmunk':
+      bq.type = 'highshelf';
+      bq.frequency.value = 1500;
+      bq.gain.value = 14;
+      distortionNode.disconnect();
+      distortionNode.connect(bq);
+      bq.connect(dryGain);
+      bq.connect(convolverNode);
+      break;
+    case 'echo':
+      reverbGain.gain.value = 0.8;
+      dryGain.gain.value = 0.7;
+      break;
+    case 'radio':
+      bq.type = 'bandpass';
+      bq.frequency.value = 1800;
+      bq.Q.value = 0.7;
+      distortionNode.curve = makeDistortionCurve(200);
+      distortionNode.disconnect();
+      distortionNode.connect(bq);
+      bq.connect(dryGain);
+      break;
+    default:
+      // ensure reconnected
+      try { distortionNode.disconnect(); } catch(e) {}
+      distortionNode.connect(dryGain);
+      distortionNode.connect(convolverNode);
+      reverbGain.gain.value = document.getElementById('reverb').value / 100;
+  }
+}
+
+function setStatus(type, text) {
+  const dot = document.getElementById('statusDot');
+  dot.className = 'status-dot' + (type ? ' ' + type : '');
+  document.getElementById('statusText').textContent = text;
+}
+
+// Mic button
+document.getElementById('micBtn').addEventListener('click', () => {
+  isRunning ? stopAudio() : startAudio();
+});
+
+// FX buttons
+document.querySelectorAll('.fx-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.fx-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentFx = btn.dataset.fx;
+    if (isRunning) applyEffect(currentFx);
+  });
+});
+
+// Sliders
+document.getElementById('pitch').addEventListener('input', function() {
+  document.getElementById('pitchVal').textContent = this.value;
+});
+
+document.getElementById('volume').addEventListener('input', function() {
+  document.getElementById('volumeVal').textContent = this.value + '%';
+  if (gainNode) gainNode.gain.value = this.value / 100;
+});
+
+document.getElementById('reverb').addEventListener('input', function() {
+  const v = this.value / 100;
+  document.getElementById('reverbVal').textContent = this.value + '%';
+  if (reverbGain) reverbGain.gain.value = v;
+  if (dryGain) dryGain.gain.value = 1 - v * 0.5;
+});
+
+// Init status
+setStatus('', 'Mikrofon starten um zu beginnen');
+</script>
+
+</body>
+</html>
